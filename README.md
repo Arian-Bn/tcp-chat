@@ -41,13 +41,14 @@ cmake --build build
 
 ---
 
-## Project Structure
-
+```
 tcp-chat/
 ├── CMakeLists.txt
 ├── server.cpp
 ├── client.cpp
 └── README.md
+```
+
 ---
 
 ## Status

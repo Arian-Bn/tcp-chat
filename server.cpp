@@ -12,6 +12,15 @@ int main() {
     return 1;
   }
 
+  // Set up server address structure
+  int reuse = 1;
+  if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) <
+      0) {
+    std::cerr << "[ERROR] Setsockopt!" << std::endl;
+    close(server_fd);
+    return 1;
+  }
+
   // Configure server address
   struct sockaddr_in server_addr{};
   server_addr.sin_family = AF_INET;

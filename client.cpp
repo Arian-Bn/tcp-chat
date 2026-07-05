@@ -16,7 +16,7 @@ int main() {
   // Configure server address
   struct sockaddr_in server_addr{};
   server_addr.sin_family = AF_INET;
-  server_addr.sin_port = htons(55554);
+  server_addr.sin_port = htons(55555);
   inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr);
 
   // Connect to server
@@ -35,6 +35,16 @@ int main() {
 
   if (bytes_sent > 0) {
     std::cout << "[SENT] " << message << std::endl;
+
+    char response_buffer[1024]{};
+    ssize_t byte_received =
+        recv(client_fd, response_buffer, sizeof(response_buffer), 0);
+    if (byte_received > 0) {
+      std::cout << "[ECHO FROM SERVER] " << response_buffer << std::endl;
+    } else {
+      std::cerr << "[ERROR] Failed to get echo from server" << std::endl;
+    }
+
   } else {
     std::cerr << "[ERROR] Failed to send message" << std::endl;
   }

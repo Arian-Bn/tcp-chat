@@ -53,7 +53,5 @@ tcp-chat/
 
 ## Status
 
-Work in progress.
-
----
-
+✅ Echo server — done  
+⏳ Multithreading + multiple clients — in progress

@@ -1,7 +1,7 @@
 #include <arpa/inet.h>
-#include <cstring>
 #include <iostream>
 #include <netinet/in.h>
+#include <string>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -29,24 +29,45 @@ int main() {
 
   std::cout << "[INFO] Connected to server!" << std::endl;
 
-  // Send message
-  const char *message = "Hello from client!";
-  ssize_t bytes_sent = send(client_fd, message, strlen(message), 0);
+  std::string user_input;
+  while (true) {
+    std::cout << "> ";
+    std::getline(std::cin, user_input);
 
-  if (bytes_sent > 0) {
-    std::cout << "[SENT] " << message << std::endl;
-
-    char response_buffer[1024]{};
-    ssize_t byte_received =
-        recv(client_fd, response_buffer, sizeof(response_buffer), 0);
-    if (byte_received > 0) {
-      std::cout << "[ECHO FROM SERVER] " << response_buffer << std::endl;
-    } else {
-      std::cerr << "[ERROR] Failed to get echo from server" << std::endl;
+    if (user_input == "exit") {
+      std::cout << "[INFO] Exiting..." << std::endl;
+      break;
     }
 
-  } else {
-    std::cerr << "[ERROR] Failed to send message" << std::endl;
+    if (user_input.empty()) {
+      continue;
+    }
+
+    // Send data to server
+    ssize_t bytes_sent =
+        send(client_fd, user_input.c_str(), user_input.length(), 0);
+    if (bytes_sent < 0) {
+      std::cerr << "[ERROR] Failed to send message" << std::endl;
+      break;
+    }
+
+    // Receive echo back from server
+    char buffer[1024]{};
+    // Level 1 byte free at the end for the null terminator
+    ssize_t byte_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+
+    if (byte_received > 0) {
+      // Ecplicitly null-terminate the receivec raw bytes to safely use
+      // std::cout
+      buffer[byte_received] = '\0';
+      std::cout << "[ECHO FROM SERVER] " << buffer << std::endl;
+    } else if (byte_received == 0) {
+      std::cout << "[INFO] Server closed the connection" << std::endl;
+      break;
+    } else {
+      std::cerr << "[ERROR] Failed to get echo from server" << std::endl;
+      break;
+    }
   }
 
   // Clean up

@@ -61,27 +61,29 @@ int main() {
 
     std::cout << "[INFO] Client connected!" << std::endl;
 
-    // Receive message from client
-    char buffer[1024] = {0};
-    ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+    while (true) {
+      // Receive message from client
+      char buffer[1024] = {0};
+      ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
 
-    if (bytes_received > 0) {
-      std::cout << " [RECV] " << buffer << std::endl;
-      ssize_t bytes_sent = send(client_fd, buffer, bytes_received, 0);
-      if (bytes_sent > 0) {
-        std::cout << "[ECHO SENT BACK]" << std::endl;
+      if (bytes_received > 0) {
+        buffer[bytes_received] = '\0';
+        std::cout << "[RECV] " << buffer << std::endl;
+
+        // Send echo back to the socket
+        send(client_fd, buffer, bytes_received, 0);
+      } else if (bytes_received == 0) {
+        std::cout << "[INFO] Client disconnected" << std::endl;
+        break;
       } else {
-        std::cerr << "[ERROR] Failded to send echo back" << std::endl;
+        std::cerr << "[ERROR] Failed to receive data" << std::endl;
+        break;
       }
-
-    } else if (bytes_received == 0) {
-      std::cout << "[INFO] Client disconnected" << std::endl;
-    } else {
-      std::cerr << "[ERROR] Failed to receive data" << std::endl;
     }
 
     // Clean up
     close(client_fd);
+    std::cout << "[INFO] Connection closed. Ready for next client. \n";
   }
 
   close(server_fd);

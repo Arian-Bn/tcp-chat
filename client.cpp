@@ -1,15 +1,24 @@
 #include <arpa/inet.h>
+#include <cerrno>
 #include <iostream>
 #include <netinet/in.h>
+#include <print>
 #include <string>
 #include <sys/socket.h>
+#include <system_error>
 #include <unistd.h>
+
+void print_system_error(std::string_view context) {
+  std::error_code ec = std::make_error_code(static_cast<std::errc>(errno));
+  std::println(std::cerr, "[ERROR] {}: {} (Code: {})", context, ec.message(),
+               ec.value());
+}
 
 int main() {
   // Create socket
   int client_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (client_fd == -1) {
-    std::cerr << "[ERROR] Failed to create socket" << std::endl;
+    print_system_error("Failed to create socker");
     return 1;
   }
 
@@ -22,12 +31,12 @@ int main() {
   // Connect to server
   if (connect(client_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) <
       0) {
-    std::cerr << "[ERROR] Failed to connect to server" << std::endl;
+    print_system_error("Failed to connetcion server");
     close(client_fd);
     return 1;
   }
 
-  std::cout << "[INFO] Connected to server!" << std::endl;
+  std::println("[INFO] Connected to server! Type 'exit' to quit.");
 
   std::string user_input;
   while (true) {
@@ -35,7 +44,7 @@ int main() {
     std::getline(std::cin, user_input);
 
     if (user_input == "exit") {
-      std::cout << "[INFO] Exiting..." << std::endl;
+      std::println("[INFO] Exiting...");
       break;
     }
 
@@ -47,7 +56,7 @@ int main() {
     ssize_t bytes_sent =
         send(client_fd, user_input.c_str(), user_input.length(), 0);
     if (bytes_sent < 0) {
-      std::cerr << "[ERROR] Failed to send message" << std::endl;
+      print_system_error("Failed to send message");
       break;
     }
 
@@ -60,12 +69,12 @@ int main() {
       // Ecplicitly null-terminate the receivec raw bytes to safely use
       // std::cout
       buffer[byte_received] = '\0';
-      std::cout << "[ECHO FROM SERVER] " << buffer << std::endl;
+      std::println("[ECHO FROM SERVER] {}", buffer);
     } else if (byte_received == 0) {
-      std::cout << "[INFO] Server closed the connection" << std::endl;
+      std::println("[INFO] Server closed the conection");
       break;
     } else {
-      std::cerr << "[ERROR] Failed to get echo from server" << std::endl;
+      print_system_error("Failed to get echo from server");
       break;
     }
   }

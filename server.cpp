@@ -1,15 +1,24 @@
 #include <arpa/inet.h>
-#include <cstring>
+#include <cerrno>
 #include <iostream>
 #include <netinet/in.h>
+#include <print>
 #include <sys/socket.h>
+#include <system_error>
 #include <unistd.h>
+
+void print_system_error(std::string_view context) {
+  std::error_code ec = std::make_error_code(static_cast<std::errc>(errno));
+  std::println(std::cerr, "[ERROR] {}: {} (Code: {})", context, ec.message(),
+               ec.value());
+}
 
 int main() {
   // Create socket
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+
   if (server_fd == -1) {
-    std::cerr << "[ERROR] Failed to create socket" << std::endl;
+    print_system_error("Failed to create socket");
     return 1;
   }
 
@@ -17,7 +26,7 @@ int main() {
   int reuse = 1;
   if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) <
       0) {
-    std::cerr << "[ERROR] Setsockopt!" << std::endl;
+    print_system_error("Setsockopt failed");
     close(server_fd);
     return 1;
   }
@@ -31,20 +40,19 @@ int main() {
   // Bind socket to address
   if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) <
       0) {
-    std::cerr << "[ERROR] Failed to bind socket: " << strerror(errno)
-              << std::endl;
+    print_system_error("Failed to bind socket");
     close(server_fd);
     return 1;
   }
 
   // Start listening
   if (listen(server_fd, 5) < 0) {
-    std::cerr << "[ERROR] Failed to listen on socket" << std::endl;
+    print_system_error("Failed to listen on socket");
     close(server_fd);
     return 1;
   }
 
-  std::cout << "[INFO] Server is listening on port 55555..." << std::endl;
+  std::println("[INFO] Server is listening on port 55555...");
 
   while (true) {
     // Accept incoming connection
@@ -54,12 +62,12 @@ int main() {
     int client_fd =
         accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
     if (client_fd < 0) {
-      std::cerr << "[ERROR] Failed to accept connection" << std::endl;
+      print_system_error("Failed to accept connection");
       close(server_fd);
       return 1;
     }
 
-    std::cout << "[INFO] Client connected!" << std::endl;
+    std::println("[INFO] Client connected!");
 
     while (true) {
       // Receive message from client
@@ -68,22 +76,22 @@ int main() {
 
       if (bytes_received > 0) {
         buffer[bytes_received] = '\0';
-        std::cout << "[RECV] " << buffer << std::endl;
+        std::println("[RECV] {}", buffer);
 
         // Send echo back to the socket
         send(client_fd, buffer, bytes_received, 0);
       } else if (bytes_received == 0) {
-        std::cout << "[INFO] Client disconnected" << std::endl;
+        std::println("[INFO] Client disconnected");
         break;
       } else {
-        std::cerr << "[ERROR] Failed to receive data" << std::endl;
+        print_system_error("Failed to receive data");
         break;
       }
     }
 
     // Clean up
     close(client_fd);
-    std::cout << "[INFO] Connection closed. Ready for next client. \n";
+    std::println("[INFO] Connection closed. Ready for next client.");
   }
 
   close(server_fd);

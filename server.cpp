@@ -63,8 +63,7 @@ int main() {
         accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
     if (client_fd < 0) {
       print_system_error("Failed to accept connection");
-      close(server_fd);
-      return 1;
+      continue;
     }
 
     std::println("[INFO] Client connected!");
@@ -76,7 +75,9 @@ int main() {
 
       if (bytes_received > 0) {
         buffer[bytes_received] = '\0';
-        std::println("[RECV] {}", buffer);
+
+        // Print to the server console
+        std::println("[SERVER RECEIVED] {}", buffer);
 
         // Send echo back to the socket
         send(client_fd, buffer, bytes_received, 0);

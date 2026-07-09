@@ -1,4 +1,5 @@
 #include <arpa/inet.h>
+#include <atomic>
 #include <cerrno>
 #include <iostream>
 #include <netinet/in.h>
@@ -6,12 +7,38 @@
 #include <string>
 #include <sys/socket.h>
 #include <system_error>
+#include <thread>
 #include <unistd.h>
+
+std::atomic<bool> should_close{false};
 
 void print_system_error(std::string_view context) {
   std::error_code ec = std::make_error_code(static_cast<std::errc>(errno));
   std::println(std::cerr, "[ERROR] {}: {} (Code: {})", context, ec.message(),
                ec.value());
+}
+
+// Background thread function: strictly handles incoming message from serevr
+void received_message(int client_fd) {
+  char buffer[1024] = {0};
+  while (true) {
+    ssize_t byte_received = recv(client_fd, buffer, sizeof(buffer), 0);
+
+    if (byte_received > 0) {
+      buffer[byte_received] = '\0';
+      // Ereaser current user prompt line character \"> \" and output the
+      // broadcast log safely
+      std::println("\r{}\n>", buffer);
+    } else if (byte_received == 0) {
+      std::println("\r[INFO] Server closed the connection.");
+      should_close = true;
+      return;
+    } else {
+      print_system_error("Error receiving data");
+      should_close = true;
+      return;
+    }
+  }
 }
 
 int main() {
@@ -38,6 +65,10 @@ int main() {
 
   std::println("[INFO] Connected to server! Type 'exit' to quit.");
 
+  // SPAWN BACKGROUND THREAD: Hand over the socket listening task to it
+  std::thread recv_thread(received_message, client_fd);
+  recv_thread.detach();
+
   std::string user_input;
   while (true) {
     std::cout << "> ";
@@ -57,24 +88,6 @@ int main() {
         send(client_fd, user_input.c_str(), user_input.length(), 0);
     if (bytes_sent < 0) {
       print_system_error("Failed to send message");
-      break;
-    }
-
-    // Receive echo back from server
-    char buffer[1024]{};
-    // Level 1 byte free at the end for the null terminator
-    ssize_t byte_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-
-    if (byte_received > 0) {
-      // Ecplicitly null-terminate the receivec raw bytes to safely use
-      // std::cout
-      buffer[byte_received] = '\0';
-      std::println("[ECHO FROM SERVER] {}", buffer);
-    } else if (byte_received == 0) {
-      std::println("[INFO] Server closed the conection");
-      break;
-    } else {
-      print_system_error("Failed to get echo from server");
       break;
     }
   }

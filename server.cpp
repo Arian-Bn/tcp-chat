@@ -1,11 +1,21 @@
+#include <algorithm>
 #include <arpa/inet.h>
 #include <cerrno>
+#include <format>
 #include <iostream>
+#include <mutex>
 #include <netinet/in.h>
 #include <print>
+#include <pstl/glue_algorithm_defs.h>
 #include <sys/socket.h>
 #include <system_error>
+#include <thread>
 #include <unistd.h>
+#include <vector>
+
+// Global storage for connected clients and its synchronization mutex
+std::vector<int> active_clients;
+std::mutex clients_mutex;
 
 void print_system_error(std::string_view context) {
   std::error_code ec = std::make_error_code(static_cast<std::errc>(errno));
@@ -13,8 +23,60 @@ void print_system_error(std::string_view context) {
                ec.value());
 }
 
+// Function to broadcast message to EVERYONE except the sender
+void broadcast_message(std::string_view message, int sender_fd) {
+  std::lock_guard<std::mutex> lock(clients_mutex);
+
+  for (int client_fd : active_clients) {
+    if (client_fd != sender_fd) {
+      send(client_fd, message.data(), message.length(), 0);
+    }
+  }
+}
+
+// Thread worker function for each connected client
+void handle_client(int client_fd) {
+  std::println("[INFO] Thread started for client fd: {}", client_fd);
+
+  while (true) {
+    char buffer[1024] = {0};
+    ssize_t byte_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+
+    if (byte_received > 0) {
+      buffer[byte_received] = '\0';
+      std::println("[SERVER RECEIVED FROM fd {}] {}", client_fd, buffer);
+
+      // BROADCEST: Send this message to all other connected clients
+      std::string broadcast_text =
+          std::format("[Client {}] {}", client_fd, buffer);
+      broadcast_message(broadcast_text, client_fd);
+
+      // Echo back to the sender just to unblock out custom C++ client recv()
+      // loop
+      send(client_fd, buffer, byte_received, 0);
+    } else { // Client disconnected or error occurred
+      if (byte_received == 0) {
+        std::println("[INFO] Client on fd {} disconnected", client_fd);
+      } else {
+        print_system_error("Gailed to received data");
+      }
+      break;
+    }
+  }
+
+  // Cleaan up: remove client from global vector and close socket
+  {
+    std::lock_guard<std::mutex> lock(clients_mutex);
+    active_clients.erase(
+        std::remove(active_clients.begin(), active_clients.end(), client_fd),
+        active_clients.end());
+  }
+  close(client_fd);
+  std::println("[INFO] Connection on fd {} closed. Thread exiting.", client_fd);
+}
+
 int main() {
-  // Create socket
+  // Create server socket
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
   if (server_fd == -1) {
@@ -68,33 +130,15 @@ int main() {
 
     std::println("[INFO] Client connected!");
 
-    while (true) {
-      // Receive message from client
-      char buffer[1024] = {0};
-      ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-
-      if (bytes_received > 0) {
-        buffer[bytes_received] = '\0';
-
-        // Print to the server console
-        std::println("[SERVER RECEIVED] {}", buffer);
-
-        // Send echo back to the socket
-        send(client_fd, buffer, bytes_received, 0);
-      } else if (bytes_received == 0) {
-        std::println("[INFO] Client disconnected");
-        break;
-      } else {
-        print_system_error("Failed to receive data");
-        break;
-      }
+    // Add new client to global list safely using mutex
+    {
+      std::lock_guard<std::mutex> lock(clients_mutex);
+      active_clients.push_back(client_fd);
     }
 
-    // Clean up
-    close(client_fd);
-    std::println("[INFO] Connection closed. Ready for next client.");
+    std::thread client_thread(handle_client, client_fd);
+    client_thread.detach();
   }
-
   close(server_fd);
 
   return 0;

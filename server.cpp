@@ -6,7 +6,6 @@
 #include <mutex>
 #include <netinet/in.h>
 #include <print>
-#include <pstl/glue_algorithm_defs.h>
 #include <sys/socket.h>
 #include <system_error>
 #include <thread>
@@ -58,7 +57,7 @@ void handle_client(int client_fd) {
       if (byte_received == 0) {
         std::println("[INFO] Client on fd {} disconnected", client_fd);
       } else {
-        print_system_error("Gailed to received data");
+        print_system_error("Failed to received data");
       }
       break;
     }

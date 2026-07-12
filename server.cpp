@@ -1,7 +1,9 @@
 #include <algorithm>
 #include <arpa/inet.h>
 #include <cerrno>
+#include <chrono>
 #include <format>
+#include <fstream>
 #include <iostream>
 #include <mutex>
 #include <netinet/in.h>
@@ -15,6 +17,20 @@
 // Global storage for connected clients and its synchronization mutex
 std::vector<int> active_clients;
 std::mutex clients_mutex;
+
+// Log a timestamped message to chat.log for server-size monitoring
+void log_to_file(std::string_view message) {
+  auto now = std::chrono::system_clock::now();
+  auto seconsd = std::chrono::floor<std::chrono::seconds>(now);
+
+  auto local_time =
+      std::chrono::zoned_time(std::chrono::current_zone(), seconsd);
+
+  std::string time_str = std::format("{:%Y-%m-%d %H:%M:%S}", local_time);
+
+  std::ofstream log_file("chat.log", std::ios::app);
+  log_file << "[" << time_str << "] " << message << std::endl;
+}
 
 void print_system_error(std::string_view context) {
   std::error_code ec = std::make_error_code(static_cast<std::errc>(errno));
@@ -36,6 +52,7 @@ void broadcast_message(std::string_view message, int sender_fd) {
 // Thread worker function for each connected client
 void handle_client(int client_fd) {
   std::println("[INFO] Thread started for client fd: {}", client_fd);
+  log_to_file(std::format("Client connected: fd={}", client_fd));
 
   while (true) {
     char buffer[1024] = {0};
@@ -56,6 +73,7 @@ void handle_client(int client_fd) {
     } else { // Client disconnected or error occurred
       if (byte_received == 0) {
         std::println("[INFO] Client on fd {} disconnected", client_fd);
+        log_to_file(std::format("Client disconnection: fd={}", client_fd));
       } else {
         print_system_error("Failed to received data");
       }
@@ -63,7 +81,7 @@ void handle_client(int client_fd) {
     }
   }
 
-  // Cleaan up: remove client from global vector and close socket
+  // Clean up: remove client from global vector and close socket
   {
     std::lock_guard<std::mutex> lock(clients_mutex);
     active_clients.erase(
@@ -75,6 +93,7 @@ void handle_client(int client_fd) {
 }
 
 int main() {
+  log_to_file("Server test is started!");
   // Create server socket
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
 

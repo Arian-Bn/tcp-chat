@@ -1,3 +1,4 @@
+#include "protocol.hpp"
 #include <algorithm>
 #include <arpa/inet.h>
 #include <cerrno>
@@ -54,22 +55,33 @@ void handle_client(int client_fd) {
   std::println("[INFO] Thread started for client fd: {}", client_fd);
   log_to_file(std::format("Client connected: fd={}", client_fd));
 
+  std::vector<char> buffer;
+
   while (true) {
-    char buffer[1024] = {0};
-    ssize_t byte_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+    char chunk[1024];
+    ssize_t byte_received = recv(client_fd, chunk, sizeof(chunk), 0);
 
     if (byte_received > 0) {
-      buffer[byte_received] = '\0';
-      std::println("[SERVER RECEIVED FROM fd {}] {}", client_fd, buffer);
+      buffer.insert(buffer.end(), chunk, chunk + byte_received);
 
-      // BROADCEST: Send this message to all other connected clients
-      std::string broadcast_text =
-          std::format("[Client {}] {}", client_fd, buffer);
-      broadcast_message(broadcast_text, client_fd);
+      while (true) {
+        std::string msg = extract_message(buffer);
+        if (msg.empty())
+          break;
 
-      // Echo back to the sender just to unblock out custom C++ client recv()
-      // loop
-      send(client_fd, buffer, byte_received, 0);
+        buffer.erase(buffer.begin(), buffer.begin() + HEADER_SIZE + msg.size());
+
+        std::println("[SERVER RECEIVEC FROM fd {}] {}", client_fd, msg);
+
+        // BROADCEST: Send this message to all other connected clients
+        std::string broadcast_text =
+            std::format("[Client {}] {}", client_fd, msg);
+        broadcast_message(broadcast_text, client_fd);
+
+        // Echo back to the sender just to unblock out custom C++ client recv()
+        auto packet = make_protocol_message(msg);
+        send(client_fd, packet.data(), packet.size(), 0);
+      }
     } else { // Client disconnected or error occurred
       if (byte_received == 0) {
         std::println("[INFO] Client on fd {} disconnected", client_fd);
@@ -93,7 +105,6 @@ void handle_client(int client_fd) {
 }
 
 int main() {
-  log_to_file("Server test is started!");
   // Create server socket
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
 

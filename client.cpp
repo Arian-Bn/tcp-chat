@@ -1,3 +1,4 @@
+#include "protocol.hpp"
 #include <arpa/inet.h>
 #include <atomic>
 #include <cerrno>
@@ -20,15 +21,23 @@ void print_system_error(std::string_view context) {
 
 // Background thread function: strictly handles incoming message from serevr
 void received_message(int client_fd) {
-  char buffer[1024] = {0};
+  std::vector<char> buffer;
   while (true) {
-    ssize_t byte_received = recv(client_fd, buffer, sizeof(buffer), 0);
+    char chunk[1024];
+    ssize_t byte_received = recv(client_fd, chunk, sizeof(chunk), 0);
 
     if (byte_received > 0) {
-      buffer[byte_received] = '\0';
-      // Ereaser current user prompt line character \"> \" and output the
-      // broadcast log safely
-      std::println("\r{}\n>", buffer);
+      buffer.insert(buffer.end(), chunk, chunk + byte_received);
+
+      while (true) {
+        std::string msg = extract_message(buffer);
+        if (msg.empty())
+          break;
+
+        buffer.erase(buffer.begin(), buffer.begin() + HEADER_SIZE + msg.size());
+        std::println("\r[RECV] {}\n", msg);
+        std::println("> ");
+      }
     } else if (byte_received == 0) {
       std::println("\r[INFO] Server closed the connection.");
       should_close = true;
@@ -83,9 +92,9 @@ int main() {
       continue;
     }
 
-    // Send data to server
-    ssize_t bytes_sent =
-        send(client_fd, user_input.c_str(), user_input.length(), 0);
+    // Send data to server using protocol
+    auto packet = make_protocol_message(user_input);
+    ssize_t bytes_sent = send(client_fd, packet.data(), packet.size(), 0);
     if (bytes_sent < 0) {
       print_system_error("Failed to send message");
       break;

@@ -71,7 +71,7 @@ void handle_client(int client_fd) {
 
         buffer.erase(buffer.begin(), buffer.begin() + HEADER_SIZE + msg.size());
 
-        std::println("[SERVER RECEIVEC FROM fd {}] {}", client_fd, msg);
+        std::println("[SERVER RECEIVED FROM fd {}] {}", client_fd, msg);
 
         // BROADCEST: Send this message to all other connected clients
         std::string broadcast_text =

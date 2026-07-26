@@ -1,6 +1,5 @@
 #include "protocol.hpp"
 #include <arpa/inet.h>
-#include <bit>
 #include <cstring>
 
 // Pack: length prefix (4 bytes) + message data

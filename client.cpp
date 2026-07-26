@@ -1,7 +1,7 @@
 #include "protocol.hpp"
 #include <arpa/inet.h>
-#include <atomic>
 #include <cerrno>
+#include <cstdlib>
 #include <iostream>
 #include <netinet/in.h>
 #include <print>
@@ -11,15 +11,13 @@
 #include <thread>
 #include <unistd.h>
 
-std::atomic<bool> should_close{false};
-
 void print_system_error(std::string_view context) {
   std::error_code ec = std::make_error_code(static_cast<std::errc>(errno));
   std::println(std::cerr, "[ERROR] {}: {} (Code: {})", context, ec.message(),
                ec.value());
 }
 
-// Background thread function: strictly handles incoming message from serevr
+// Background thread function: strictly handles incoming message from server
 void received_message(int client_fd) {
   std::vector<char> buffer;
   while (true) {
@@ -40,12 +38,12 @@ void received_message(int client_fd) {
       }
     } else if (byte_received == 0) {
       std::println("\r[INFO] Server closed the connection.");
-      should_close = true;
-      return;
+      close(client_fd);
+      std::exit(0);
     } else {
       print_system_error("Error receiving data");
-      should_close = true;
-      return;
+      close(client_fd);
+      std::exit(1);
     }
   }
 }
@@ -54,7 +52,7 @@ int main() {
   // Create socket
   int client_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (client_fd == -1) {
-    print_system_error("Failed to create socker");
+    print_system_error("Failed to create socket");
     return 1;
   }
 
@@ -67,7 +65,7 @@ int main() {
   // Connect to server
   if (connect(client_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) <
       0) {
-    print_system_error("Failed to connetcion server");
+    print_system_error("Failed to connect to server");
     close(client_fd);
     return 1;
   }

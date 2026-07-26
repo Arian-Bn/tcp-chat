@@ -3,6 +3,7 @@
 #include <arpa/inet.h>
 #include <cerrno>
 #include <chrono>
+#include <fcntl.h>
 #include <format>
 #include <fstream>
 #include <iostream>
@@ -37,6 +38,18 @@ void print_system_error(std::string_view context) {
   std::error_code ec = std::make_error_code(static_cast<std::errc>(errno));
   std::println(std::cerr, "[ERROR] {}: {} (Code: {})", context, ec.message(),
                ec.value());
+}
+
+void set_nonblocking(int fd) {
+  int flags = fcntl(fd, F_GETFL, 0);
+  if (flags == -1) {
+    print_system_error("fcntl F_GETFL");
+    return;
+  }
+
+  if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+    print_system_error("fcntl F_SETFL O_NONBLOCK");
+  }
 }
 
 // Function to broadcast message to EVERYONE except the sender
@@ -156,6 +169,7 @@ int main() {
       print_system_error("Failed to accept connection");
       continue;
     }
+    set_nonblocking(client_fd);
 
     std::println("[INFO] Client connected!");
 

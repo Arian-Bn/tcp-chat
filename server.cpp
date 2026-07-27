@@ -10,6 +10,7 @@
 #include <mutex>
 #include <netinet/in.h>
 #include <print>
+#include <sys/epoll.h>
 #include <sys/socket.h>
 #include <system_error>
 #include <thread>
@@ -156,7 +157,74 @@ int main() {
     return 1;
   }
 
-  std::println("[INFO] Server is listening on port 55555...");
+  // Create epoll descriptor
+  int epoll_fd = epoll_create1(0);
+  if (epoll_fd == -1) {
+    print_system_error("epoll_create1 failed");
+    close(server_fd);
+    return 1;
+  }
+
+  // Add server socket to epoll
+  struct epoll_event ev{};
+  ev.events = EPOLLIN;
+  ev.data.fd = server_fd;
+
+  if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_fd, &ev) == -1) {
+    print_system_error("epoll_ctl: add server_fd");
+    close(server_fd);
+    close(epoll_fd);
+    return 1;
+  }
+
+  std::println("[INFO] Server is listening on port 55555 (epoll version)");
+
+  // Main epoll loop
+  const int MAX_EVENTS = 64;
+  struct epoll_event events[MAX_EVENTS];
+
+  while (true) {
+    int nfds = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
+    if (nfds == -1) {
+      print_system_error("epoll_wait failed");
+      break;
+    }
+
+    for (int i = 0; i < nfds; i++) {
+      int fd = events[i].data.fd;
+
+      if (fd == server_fd) {
+        struct sockaddr_in client_addr{};
+        socklen_t client_len = sizeof(client_addr);
+
+        int client_fd =
+            accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
+        if (client_fd == -1) {
+          if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            continue;
+          }
+          print_system_error("Faild to accept connection");
+          continue;
+        }
+
+        set_nonblocking(client_fd);
+
+        struct epoll_event ev_client{};
+        ev_client.events = EPOLLIN || EPOLLET;
+        ev_client.data.fd = client_fd;
+
+        if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &ev_client) == -1) {
+          print_system_error("epoll_ctl: add client_fd");
+          close(client_fd);
+          continue;
+        }
+
+        std::println("[INFO] New client connected: fd={}", client_fd);
+      } else {
+        std::println("[INFO] Data fron client fd: {}", fd);
+      }
+    }
+  }
 
   while (true) {
     // Accept incoming connection

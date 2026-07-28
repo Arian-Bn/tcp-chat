@@ -33,8 +33,7 @@ void received_message(int client_fd) {
           break;
 
         buffer.erase(buffer.begin(), buffer.begin() + HEADER_SIZE + msg.size());
-        std::println("\r[RECV] {}\n", msg);
-        std::println("> ");
+        std::println("\r[CHAT]: {}\n", msg);
       }
     } else if (byte_received == 0) {
       std::println("\r[INFO] Server closed the connection.");

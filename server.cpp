@@ -7,20 +7,17 @@
 #include <format>
 #include <fstream>
 #include <iostream>
-#include <mutex>
 #include <netinet/in.h>
 #include <print>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <system_error>
-#include <thread>
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
 
 // Global storage for connected clients and its synchronization mutex
 std::vector<int> active_clients;
-std::mutex clients_mutex;
 std::unordered_map<int, std::vector<char>> client_buffers;
 
 // Log a timestamped message to chat.log for server-size monitoring
@@ -53,71 +50,6 @@ void set_nonblocking(int fd) {
   if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
     print_system_error("fcntl F_SETFL O_NONBLOCK");
   }
-}
-
-// Function to broadcast message to EVERYONE except the sender
-void broadcast_message(std::string_view message, int sender_fd) {
-  std::lock_guard<std::mutex> lock(clients_mutex);
-
-  for (int client_fd : active_clients) {
-    if (client_fd != sender_fd) {
-      send(client_fd, message.data(), message.length(), 0);
-    }
-  }
-}
-
-// Thread worker function for each connected client
-void handle_client(int client_fd) {
-  std::println("[INFO] Thread started for client fd: {}", client_fd);
-  log_to_file(std::format("Client connected: fd={}", client_fd));
-
-  std::vector<char> buffer;
-
-  while (true) {
-    char chunk[1024];
-    ssize_t byte_received = recv(client_fd, chunk, sizeof(chunk), 0);
-
-    if (byte_received > 0) {
-      buffer.insert(buffer.end(), chunk, chunk + byte_received);
-
-      while (true) {
-        std::string msg = extract_message(buffer);
-        if (msg.empty())
-          break;
-
-        buffer.erase(buffer.begin(), buffer.begin() + HEADER_SIZE + msg.size());
-
-        std::println("[SERVER RECEIVED FROM fd {}] {}", client_fd, msg);
-
-        // BROADCEST: Send this message to all other connected clients
-        std::string broadcast_text =
-            std::format("[Client {}] {}", client_fd, msg);
-        broadcast_message(broadcast_text, client_fd);
-
-        // Echo back to the sender just to unblock out custom C++ client recv()
-        auto packet = make_protocol_message(msg);
-        send(client_fd, packet.data(), packet.size(), 0);
-      }
-    } else { // Client disconnected or error occurred
-      if (byte_received == 0) {
-        std::println("[INFO] Client on fd {} disconnected", client_fd);
-        log_to_file(std::format("Client disconnection: fd={}", client_fd));
-      } else {
-        print_system_error("Failed to received data");
-      }
-      break;
-    }
-  }
-
-  // Clean up: remove client from global vector and close socket
-  {
-    std::lock_guard<std::mutex> lock(clients_mutex);
-    active_clients.erase(
-        std::remove(active_clients.begin(), active_clients.end(), client_fd),
-        active_clients.end());
-  }
-  close(client_fd);
-  std::println("[INFO] Connection on fd {} closed. Thread exiting.", client_fd);
 }
 
 int main() {
@@ -212,7 +144,7 @@ int main() {
         set_nonblocking(client_fd);
 
         struct epoll_event ev_client{};
-        ev_client.events = EPOLLIN || EPOLLET;
+        ev_client.events = EPOLLIN | EPOLLET;
         ev_client.data.fd = client_fd;
 
         if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &ev_client) == -1) {
@@ -221,66 +153,72 @@ int main() {
           continue;
         }
 
+        active_clients.push_back(client_fd);
         std::println("[INFO] New client connected: fd={}", client_fd);
       } else {
         // Reading data from client
-        char chunk[1024];
-        ssize_t bytes_read = recv(fd, chunk, sizeof(chunk) - 1, 0);
+        bool connection_closed = false;
 
-        if (bytes_read > 0) {
-          client_buffers[fd].insert(client_buffers[fd].end(), chunk,
-                                    chunk + bytes_read);
-          while (true) {
-            std::string msg = extract_message(client_buffers[fd]);
-            if (msg.empty())
+        while (true) {
+          char chunk[1024];
+          ssize_t bytes_read = recv(fd, chunk, sizeof(chunk) - 1, 0);
+
+          if (bytes_read > 0) {
+            client_buffers[fd].insert(client_buffers[fd].end(), chunk,
+                                      chunk + bytes_read);
+            while (true) {
+              std::string msg = extract_message(client_buffers[fd]);
+              if (msg.empty())
+                break;
+
+              // Remove processed bytes
+              client_buffers[fd].erase(client_buffers[fd].begin(),
+                                       client_buffers[fd].begin() +
+                                           HEADER_SIZE + msg.size());
+              std::println("[Client {}] {}", fd, msg);
+
+              for (int order_fd : active_clients) {
+                if (order_fd != fd) {
+                  std::string broadcast_msg =
+                      std::format("[Client {}] {}", fd, msg);
+                  auto packet = make_protocol_message(broadcast_msg);
+                  send(order_fd, packet.data(), packet.size(), 0);
+                  std::println("[BCAST] [Client {} -> Client {}]: {}", fd,
+                               order_fd, msg);
+                }
+              }
+              // Echo back to sender
+              auto echo_packet = make_protocol_message(msg);
+              send(fd, echo_packet.data(), echo_packet.size(), 0);
+              std::println("[ECHO] [Server -> Client {}]: {}", fd, msg);
+            }
+          } else if (bytes_read == 0) {
+            std::println("[INFO] Client {} disconnected", fd);
+            connection_closed = true;
+            break;
+
+          } else {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
               break;
+            }
+            print_system_error("recv failed");
+            connection_closed = true;
+            break;
+          }
+        }
 
-            // Remove processed bytes
-            client_buffers[fd].erase(client_buffers[fd].begin(),
-                                     client_buffers[fd].begin() + HEADER_SIZE +
-                                         msg.size());
-            std::println("[RECV] {}: {}", fd, msg);
-          }
-        } else if (bytes_read == 0) {
-          std::println("[INFO] Client {} disconnection", fd);
+        if (connection_closed) {
           epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
           close(fd);
-        } else {
-          if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            continue;
-          }
-          print_system_error("recv failed");
-          epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
-          close(fd);
+          client_buffers.erase(fd);
+          active_clients.erase(
+              std::remove(active_clients.begin(), active_clients.end(), fd),
+              active_clients.end());
         }
       }
     }
   }
 
-  while (true) {
-    // Accept incoming connection
-    struct sockaddr_in client_addr{};
-    socklen_t client_len = sizeof(client_addr);
-
-    int client_fd =
-        accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
-    if (client_fd < 0) {
-      print_system_error("Failed to accept connection");
-      continue;
-    }
-    set_nonblocking(client_fd);
-
-    std::println("[INFO] Client connected!");
-
-    // Add new client to global list safely using mutex
-    {
-      std::lock_guard<std::mutex> lock(clients_mutex);
-      active_clients.push_back(client_fd);
-    }
-
-    std::thread client_thread(handle_client, client_fd);
-    client_thread.detach();
-  }
   close(server_fd);
 
   return 0;

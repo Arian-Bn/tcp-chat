@@ -11,10 +11,10 @@ You can add a config file for additional settings. Please check https://github.c
 
 📈 Top 5 Files by Token Count:
 ──────────────────────────────
-1.  server.cpp (2 080 tokens, 8 373 chars, 40.1%)
-2.  kodtxt (833 tokens, 1 924 chars, 16.1%)
-3.  client.cpp (696 tokens, 2 759 chars, 13.4%)
-4.  kod.txt (266 tokens, 805 chars, 5.1%)
+1.  server.cpp (1 983 tokens, 7 812 chars, 38.8%)
+2.  kod.txt (857 tokens, 1 972 chars, 16.8%)
+3.  client.cpp (696 tokens, 2 759 chars, 13.6%)
+4.  kodtxt (266 tokens, 805 chars, 5.2%)
 5.  protocol.cpp (248 tokens, 972 chars, 4.8%)
 
 🔎 Security Check:
@@ -25,8 +25,8 @@ You can add a config file for additional settings. Please check https://github.c
 📊 Pack Summary:
 ────────────────
   Total Files: 10 files
- Total Tokens: 5 188 tokens
-  Total Chars: 18 987 chars
+ Total Tokens: 5 115 tokens
+  Total Chars: 18 474 chars
        Output: repomix-output.xml
      Security: ✔ No suspicious files detected
 

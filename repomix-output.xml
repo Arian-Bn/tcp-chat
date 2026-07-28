@@ -45,6 +45,7 @@ The content is organized as follows:
 client.cpp
 CMakeLists.txt
 kod.txt
+kodtxt
 protocol.cpp
 protocol.hpp
 README.md
@@ -54,11 +55,42 @@ server.cpp
 <files>
 This section contains the contents of the repository's files.
 
-<file path="kod.txt">
-📦 Repomix v1.11.1
+<file path="kodtxt">
+ðŸ“¦ Repomix v1.11.1
 
 No custom config found at repomix.config.ts, repomix.config.mts, repomix.config.cts, repomix.config.js, repomix.config.mjs, repomix.config.cjs, repomix.config.json5, repomix.config.jsonc, repomix.config.json or global config at /home/arian/.config/repomix/repomix.config.ts, /home/arian/.config/repomix/repomix.config.mts, /home/arian/.config/repomix/repomix.config.cts, /home/arian/.config/repomix/repomix.config.js, /home/arian/.config/repomix/repomix.config.mjs, /home/arian/.config/repomix/repomix.config.cjs, /home/arian/.config/repomix/repomix.config.json5, /home/arian/.config/repomix/repomix.config.jsonc, /home/arian/.config/repomix/repomix.config.json.
 You can add a config file for additional settings. Please check https://github.com/yamadashy/repomix for more information.
+[36mâ ™[39m Collect file... (10/10) [2mserver.cpp[22m
+[2K[1A[2K[G[36mâ ¹[39m Processing files...
+[2K[1A[2K[G[36mâ ¸[39m Calculating metrics...
+[2K[1A[2K[G[36mâ ¼[39m Calculating metrics...
+[2K[1A[2K[G[32mâœ”[39m Packing completed successfully!
+
+ðŸ“ˆ Top 5 Files by Token Count:
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+1.  server.cpp (1Â 983 tokens, 7Â 812 chars, 38.8%)
+2.  kod.txt (857 tokens, 1Â 972 chars, 16.8%)
+3.  client.cpp (696 tokens, 2Â 759 chars, 13.6%)
+4.  kodtxt (266 tokens, 805 chars, 5.2%)
+5.  protocol.cpp (248 tokens, 972 chars, 4.8%)
+
+ðŸ”Ž Security Check:
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+âœ” No suspicious files detected.
+
+
+ðŸ“Š Pack Summary:
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  Total Files: 10 files
+ Total Tokens: 5Â 115 tokens
+  Total Chars: 18Â 474 chars
+       Output: repomix-output.xml
+     Security: âœ” No suspicious files detected
+
+ðŸŽ‰ All Done!
+Your repository has been successfully packed.
+
+ðŸ’¡ Repomix is now available in your browser! Try it at https://repomix.com
 </file>
 
 <file path=".clangd">
@@ -136,6 +168,13 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+</file>
+
+<file path="kod.txt">
+📦 Repomix v1.11.1
+
+No custom config found at repomix.config.ts, repomix.config.mts, repomix.config.cts, repomix.config.js, repomix.config.mjs, repomix.config.cjs, repomix.config.json5, repomix.config.jsonc, repomix.config.json or global config at /home/arian/.config/repomix/repomix.config.ts, /home/arian/.config/repomix/repomix.config.mts, /home/arian/.config/repomix/repomix.config.cts, /home/arian/.config/repomix/repomix.config.js, /home/arian/.config/repomix/repomix.config.mjs, /home/arian/.config/repomix/repomix.config.cjs, /home/arian/.config/repomix/repomix.config.json5, /home/arian/.config/repomix/repomix.config.jsonc, /home/arian/.config/repomix/repomix.config.json.
+You can add a config file for additional settings. Please check https://github.com/yamadashy/repomix for more information.
 </file>
 
 <file path="protocol.hpp">
@@ -385,15 +424,18 @@ int main() {
 #include <mutex>
 #include <netinet/in.h>
 #include <print>
+#include <sys/epoll.h>
 #include <sys/socket.h>
 #include <system_error>
 #include <thread>
 #include <unistd.h>
+#include <unordered_map>
 #include <vector>
 
 // Global storage for connected clients and its synchronization mutex
 std::vector<int> active_clients;
 std::mutex clients_mutex;
+std::unordered_map<int, std::vector<char>> client_buffers;
 
 // Log a timestamped message to chat.log for server-size monitoring
 void log_to_file(std::string_view message) {
@@ -531,7 +573,103 @@ int main() {
     return 1;
   }
 
-  std::println("[INFO] Server is listening on port 55555...");
+  // Create epoll descriptor
+  int epoll_fd = epoll_create1(0);
+  if (epoll_fd == -1) {
+    print_system_error("epoll_create1 failed");
+    close(server_fd);
+    return 1;
+  }
+
+  // Add server socket to epoll
+  struct epoll_event ev{};
+  ev.events = EPOLLIN;
+  ev.data.fd = server_fd;
+
+  if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_fd, &ev) == -1) {
+    print_system_error("epoll_ctl: add server_fd");
+    close(server_fd);
+    close(epoll_fd);
+    return 1;
+  }
+
+  std::println("[INFO] Server is listening on port 55555 (epoll version)");
+
+  // Main epoll loop
+  const int MAX_EVENTS = 64;
+  struct epoll_event events[MAX_EVENTS];
+
+  while (true) {
+    int nfds = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
+    if (nfds == -1) {
+      print_system_error("epoll_wait failed");
+      break;
+    }
+
+    for (int i = 0; i < nfds; i++) {
+      int fd = events[i].data.fd;
+
+      if (fd == server_fd) {
+        struct sockaddr_in client_addr{};
+        socklen_t client_len = sizeof(client_addr);
+
+        int client_fd =
+            accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
+        if (client_fd == -1) {
+          if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            continue;
+          }
+          print_system_error("Faild to accept connection");
+          continue;
+        }
+
+        set_nonblocking(client_fd);
+
+        struct epoll_event ev_client{};
+        ev_client.events = EPOLLIN || EPOLLET;
+        ev_client.data.fd = client_fd;
+
+        if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &ev_client) == -1) {
+          print_system_error("epoll_ctl: add client_fd");
+          close(client_fd);
+          continue;
+        }
+
+        std::println("[INFO] New client connected: fd={}", client_fd);
+      } else {
+        // Reading data from client
+        char chunk[1024];
+        ssize_t bytes_read = recv(fd, chunk, sizeof(chunk) - 1, 0);
+
+        if (bytes_read > 0) {
+          client_buffers[fd].insert(client_buffers[fd].end(), chunk,
+                                    chunk + bytes_read);
+          while (true) {
+            std::string msg = extract_message(client_buffers[fd]);
+            if (msg.empty())
+              break;
+
+            // Remove processed bytes
+            client_buffers[fd].erase(client_buffers[fd].begin(),
+                                     client_buffers[fd].begin() + HEADER_SIZE +
+                                         msg.size());
+            std::println("[RECV] {}: {}", fd, msg);
+          }
+        } else if (bytes_read == 0) {
+          std::println("[INFO] Client {} disconnection", fd);
+          epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
+          close(fd);
+        } else {
+          if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            continue;
+          }
+          print_system_error("recv failed");
+          epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
+          close(fd);
+        }
+      }
+    }
+  }
 
   while (true) {
     // Accept incoming connection

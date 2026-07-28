@@ -15,11 +15,13 @@
 #include <system_error>
 #include <thread>
 #include <unistd.h>
+#include <unordered_map>
 #include <vector>
 
 // Global storage for connected clients and its synchronization mutex
 std::vector<int> active_clients;
 std::mutex clients_mutex;
+std::unordered_map<int, std::vector<char>> client_buffers;
 
 // Log a timestamped message to chat.log for server-size monitoring
 void log_to_file(std::string_view message) {
@@ -221,7 +223,36 @@ int main() {
 
         std::println("[INFO] New client connected: fd={}", client_fd);
       } else {
-        std::println("[INFO] Data fron client fd: {}", fd);
+        // Reading data from client
+        char chunk[1024];
+        ssize_t bytes_read = recv(fd, chunk, sizeof(chunk) - 1, 0);
+
+        if (bytes_read > 0) {
+          client_buffers[fd].insert(client_buffers[fd].end(), chunk,
+                                    chunk + bytes_read);
+          while (true) {
+            std::string msg = extract_message(client_buffers[fd]);
+            if (msg.empty())
+              break;
+
+            // Remove processed bytes
+            client_buffers[fd].erase(client_buffers[fd].begin(),
+                                     client_buffers[fd].begin() + HEADER_SIZE +
+                                         msg.size());
+            std::println("[RECV] {}: {}", fd, msg);
+          }
+        } else if (bytes_read == 0) {
+          std::println("[INFO] Client {} disconnection", fd);
+          epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
+          close(fd);
+        } else {
+          if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            continue;
+          }
+          print_system_error("recv failed");
+          epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
+          close(fd);
+        }
       }
     }
   }

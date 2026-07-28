@@ -67,3 +67,8 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# Temporary build and pack files
+repomix-output.xml
+kod.txt
+

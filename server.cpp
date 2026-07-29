@@ -127,6 +127,17 @@ int main() {
     for (int i = 0; i < nfds; i++) {
       int fd = events[i].data.fd;
 
+      if (events[i].events & (EPOLLERR | EPOLLHUP)) {
+        std::println("[ERROR] Socket {} error or hangup", fd);
+        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
+        close(fd);
+        client_buffers.erase(fd);
+        active_clients.erase(
+            std::remove(active_clients.begin(), active_clients.end(), fd),
+            active_clients.end());
+        continue;
+      }
+
       if (fd == server_fd) {
         struct sockaddr_in client_addr{};
         socklen_t client_len = sizeof(client_addr);

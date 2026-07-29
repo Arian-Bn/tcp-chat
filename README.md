@@ -6,7 +6,7 @@ A simple TCP chat application using Berkeley sockets. The server handles multipl
 
 ## Tech Stack
 
-- **C++23** — programming language
+- **C++23+** — programming language
 - **Berkeley sockets** — TCP/IP API
 - **epoll** — I/O multiplexing (Linux)
 - **std::thread** — multithreading

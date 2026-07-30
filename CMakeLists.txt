@@ -12,7 +12,7 @@ find_package(Threads REQUIRED)
 
 add_executable(server server.cpp protocol.cpp)
 add_executable(client client.cpp protocol.cpp)
-add_executable(asio_server asio_server.cpp ChatServer.cpp)
+add_executable(asio_server asio_server.cpp ChatServer.cpp ChatSession.cpp)
 
 target_link_libraries(server PRIVATE Boost::boost Threads::Threads)
 target_link_libraries(client PRIVATE Boost::boost Threads::Threads)

@@ -1,4 +1,5 @@
 #include "ChatServer.hpp"
+#include "ChatSession.hpp"
 #include <memory>
 #include <print>
 
@@ -12,16 +13,16 @@ ChatServer::ChatServer(boost::asio::io_context &io_context, int port)
 void ChatServer::start_accept() {
   auto socket = std::make_shared<tcp::socket>(io_context_);
 
-  acceptor_.async_accept(*socket, [this, socket](
-                                      const boost::system::error_code &error) {
-    if (!error) {
-      std::string client_ip = socket->remote_endpoint().address().to_string();
+  acceptor_.async_accept(
+      *socket, [this, socket](const boost::system::error_code &error) {
+        if (!error) {
+          std::println("[SERVER] Successful connection from: {}",
+                       socket->remote_endpoint().address().to_string());
+          std::make_shared<ChatSession>(std::move(*socket))->start();
+        } else {
+          std::println(stderr, "[SERVER] Accept error: {}", error.message());
+        }
 
-      std::println("[SERVER] Successful connection from: {}", client_ip);
-    } else {
-      std::println(stderr, "[SERVER] Accept error: {}", error.message());
-    }
-
-    start_accept();
-  });
+        start_accept();
+      });
 }

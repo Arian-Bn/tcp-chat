@@ -1,4 +1,5 @@
-cmake_minimum_required (VERSION 3.10)
+cmake_minimum_required (VERSION 3.20)
+cmake_policy(SET CMP0167 OLD)
 
 project (tcp-chat CXX)
 
@@ -11,7 +12,7 @@ find_package(Threads REQUIRED)
 
 add_executable(server server.cpp protocol.cpp)
 add_executable(client client.cpp protocol.cpp)
-add_executable(asio_server asio_server.cpp protocol.cpp)
+add_executable(asio_server asio_server.cpp ChatServer.cpp)
 
 target_link_libraries(server PRIVATE Boost::boost Threads::Threads)
 target_link_libraries(client PRIVATE Boost::boost Threads::Threads)

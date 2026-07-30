@@ -18,7 +18,9 @@ void ChatServer::start_accept() {
         if (!error) {
           std::println("[SERVER] Successful connection from: {}",
                        socket->remote_endpoint().address().to_string());
-          std::make_shared<ChatSession>(std::move(*socket))->start();
+          static ChatRoom temporary_room;
+          std::make_shared<ChatSession>(std::move(*socket), temporary_room)
+              ->start();
         } else {
           std::println(stderr, "[SERVER] Accept error: {}", error.message());
         }

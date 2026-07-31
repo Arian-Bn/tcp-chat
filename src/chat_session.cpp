@@ -1,4 +1,5 @@
 #include "chat_session.hpp"
+#include "utils.hpp"
 #include <boost/asio/write.hpp>
 #include <print>
 #include <utility>
@@ -39,6 +40,7 @@ void ChatSession::do_read() {
           do_read();
         } else if (error == boost::asio::error::eof) {
           std::println("[SESSION] Client disconnected gracefully.");
+          log_to_file("asio", "Client disconnected");
         } else {
           std::println("[SESSION] Read error: {}", error.message());
         }

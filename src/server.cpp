@@ -1,11 +1,10 @@
 #include "protocol.hpp"
+#include "utils.hpp"
 #include <algorithm>
 #include <arpa/inet.h>
 #include <cerrno>
-#include <chrono>
 #include <fcntl.h>
 #include <format>
-#include <fstream>
 #include <iostream>
 #include <netinet/in.h>
 #include <print>
@@ -19,20 +18,6 @@
 // Global storage for connected clients and its synchronization mutex
 std::vector<int> active_clients;
 std::unordered_map<int, std::vector<char>> client_buffers;
-
-// Log a timestamped message to chat.log for server-size monitoring
-void log_to_file(std::string_view message) {
-  auto now = std::chrono::system_clock::now();
-  auto seconsd = std::chrono::floor<std::chrono::seconds>(now);
-
-  auto local_time =
-      std::chrono::zoned_time(std::chrono::current_zone(), seconsd);
-
-  std::string time_str = std::format("{:%Y-%m-%d %H:%M:%S}", local_time);
-
-  std::ofstream log_file("chat.log", std::ios::app);
-  log_file << "[" << time_str << "] " << message << std::endl;
-}
 
 void print_system_error(std::string_view context) {
   std::error_code ec = std::make_error_code(static_cast<std::errc>(errno));
@@ -166,6 +151,7 @@ int run_epoll_server() {
 
         active_clients.push_back(client_fd);
         std::println("[INFO] New client connected: fd={}", client_fd);
+        log_to_file("epoll", std::format("Client connected: fd={}", client_fd));
       } else {
         // Reading data from client
         bool connection_closed = false;
@@ -205,6 +191,7 @@ int run_epoll_server() {
             }
           } else if (bytes_read == 0) {
             std::println("[INFO] Client {} disconnected", fd);
+            log_to_file("epoll", std::format("Client disconnected: fd={}", fd));
             connection_closed = true;
             break;
 

@@ -1,4 +1,6 @@
+#include "utils.hpp"
 #include <arpa/inet.h>
+#include <format>
 #include <iostream>
 #include <print>
 #include <sys/socket.h>
@@ -16,6 +18,7 @@ void handle_client(int client_fd) {
     // echo
     send(client_fd, buffer, bytes, 0);
   }
+  log_to_file("threads", "Client disconnected");
   close(client_fd);
 }
 
@@ -54,6 +57,7 @@ int run_threaded_server() {
       continue;
 
     std::println("[THREAD] New client connected");
+    log_to_file("threads", std::format("Client connected"));
     std::thread(handle_client, client_fd).detach();
   }
 

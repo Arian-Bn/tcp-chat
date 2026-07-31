@@ -24,6 +24,7 @@ add_executable(server
     src/chat_session.cpp 
     src/chat_room.cpp 
     src/protocol.cpp
+    src/utils.cpp
 )
 
 target_include_directories(server PRIVATE include)

@@ -17,12 +17,12 @@ add_executable(client
 )
 add_executable(server 
     src/main.cpp 
-    src/server.cpp 
-    src/asio_server.cpp
-    src/thread_server.cpp
-    src/chat_server.cpp 
-    src/chat_session.cpp 
-    src/chat_room.cpp 
+    src/server/server.cpp 
+    src/server/asio_server.cpp
+    src/server/thread_server.cpp
+    src/core/chat_server.cpp 
+    src/core/chat_session.cpp 
+    src/core/chat_room.cpp 
     src/protocol.cpp
     src/utils.cpp
 )

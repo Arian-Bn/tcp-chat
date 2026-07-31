@@ -46,6 +46,7 @@ cmake --build build
 ---
 
 
+```
 tcp-chat/
 ├── CMakeLists.txt
 ├── README.md
@@ -58,15 +59,18 @@ tcp-chat/
 │   └── utils.hpp
 └── src/                # Source files
     ├── main.cpp
-    ├── server.cpp          # epoll
-    ├── thread_server.cpp   # multithreaded
-    ├── asio_server.cpp     # Boost.Asio
-    ├── chat_server.cpp
-    ├── chat_session.cpp
-    ├── chat_room.cpp
     ├── client.cpp
     ├── protocol.cpp
-    └── utils.cpp
+    ├── utils.cpp
+    ├── servers/
+    │   ├── server.cpp          # epoll
+    │   ├── thread_server.cpp   # multithreaded
+    │   └── asio_server.cpp     # Boost.Asio
+    └── core/
+        ├── chat_server.cpp
+        ├── chat_session.cpp
+        └── chat_room.cpp
+```
 
 ---
 

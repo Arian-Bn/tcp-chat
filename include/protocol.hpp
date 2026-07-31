@@ -6,8 +6,8 @@
 
 constexpr uint32_t HEADER_SIZE = 4;
 
-// Send a message with a lenght prefix
+// Pack: length prefix (4 bytes) + message data
 std::vector<char> make_protocol_message(std::string_view message);
 
-// Receive a message from the protocol (only if data is available)
+// Unpack: extract the first complete message from raw byte buffer
 std::string extract_message(const std::vector<char> &data);

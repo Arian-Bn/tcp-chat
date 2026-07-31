@@ -14,7 +14,8 @@ add_executable(client client.cpp protocol.cpp)
 add_executable(server 
     main.cpp 
     server.cpp 
-    asio_server.cpp 
+    asio_server.cpp
+    thread_server.cpp
     chat_server.cpp 
     chat_session.cpp 
     chat_room.cpp 

@@ -1,6 +1,7 @@
 #include <print>
 #include <string_view>
 
+int run_threaded_server();
 int run_epoll_server();
 int run_asio_server();
 
@@ -19,6 +20,7 @@ int main(int argc, char *argv[]) {
 
   if (mode == "threads") {
     std::println("[MAIN] Starting multithreaded server...");
+    return run_threaded_server();
   } else if (mode == "epoll") {
     std::println("[MAIN] Starting epoll server...");
     return run_epoll_server();

@@ -52,7 +52,7 @@ void set_nonblocking(int fd) {
   }
 }
 
-int main() {
+int run_epoll_server() {
   // Create server socket
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
 

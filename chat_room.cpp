@@ -1,4 +1,4 @@
-#include "ChatRoom.hpp"
+#include "chat_room.hpp"
 #include <print>
 
 void ChatRoom::join(chat_participant_ptr participant) {

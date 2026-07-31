@@ -1,9 +1,9 @@
-#include "ChatServer.hpp"
+#include "chat_server.hpp"
 #include <boost/asio.hpp>
 #include <exception>
 #include <print>
 
-int main() {
+int run_asio_server() {
   try {
     boost::asio::io_context io_context;
 

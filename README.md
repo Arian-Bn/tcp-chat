@@ -21,7 +21,7 @@ A simple TCP chat application using Berkeley sockets. The server handles multipl
 The project evolved step-by-step from basic concepts to a high-concurrency architecture:
 1. **v1.0 (Multithreaded Server)**: A classic `One Thread Per Client` model. Each client was handled in a dedicated thread. While simple to implement, this approach fails to scale to thousands of clients due to thread context-switching overhead.
 2. **v2.0 (Asynchronous Epoll Server)**: A complete transition to non-blocking I/O (`O_NONBLOCK`) and the Linux `epoll` system call. Now, a single server thread efficiently manages hundreds of concurrent clients, reacting only to actual socket events.
-3. **v3.0 (Boost.Asio Server)**: A modern Proactor-pattern implementation using Boost.Asio. Fully asynchronous with shared_ptr-based session management, message queuing, and thread-safe broadcast.
+3. **v3.0 (Boost.Asio Server)**: A modern Proactor-pattern implementation using Boost.Asio. Fully asynchronous with std::shared_ptr-based session management, message queuing, and thread-safe broadcast.
 
 ---
 
@@ -41,6 +41,9 @@ cmake --build build
 
 # 3. Start client
 ./build/client
+
+# 4. Run stress test (spawns concurrent clients)
+./stress_test.sh
 ```
 
 ---

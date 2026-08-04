@@ -10,7 +10,7 @@ int main(int argc, char *argv[]) {
   std::string_view mode = "epoll";
 
   for (int i = 1; i < argc; i++) {
-    if (argv[i] == std::string("--mode") && i + 1 < argc) {
+    if (std::string_view(argv[i]) == "--mode" && i + 1 < argc) {
       mode = argv[i + 1];
       break;
     }

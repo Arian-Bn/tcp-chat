@@ -32,3 +32,10 @@ target_include_directories(client PRIVATE include)
 
 target_link_libraries(server PRIVATE Boost::boost Threads::Threads)
 target_link_libraries(client PRIVATE Boost::boost Threads::Threads)
+
+# Enable ASan + UBSan for Debug builds only (memory safety + UB checks)
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(STATUS "Enabling ASan and UBSan...")
+    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address,undefined)
+endif()

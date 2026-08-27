@@ -91,7 +91,8 @@ int main() {
 
     // Send data to server using protocol
     auto packet = make_protocol_message(user_input);
-    ssize_t bytes_sent = send(client_fd, packet.data(), packet.size(), 0);
+    ssize_t bytes_sent =
+        send(client_fd, packet.data(), packet.size(), MSG_NOSIGNAL);
     if (bytes_sent < 0) {
       print_system_error("Failed to send message");
       break;

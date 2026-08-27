@@ -1,4 +1,5 @@
 #include <print>
+#include <signal.h>
 #include <string_view>
 
 int run_threaded_server();
@@ -6,6 +7,7 @@ int run_epoll_server();
 int run_asio_server();
 
 int main(int argc, char *argv[]) {
+  signal(SIGPIPE, SIG_IGN);
   // Default value
   std::string_view mode = "epoll";
 

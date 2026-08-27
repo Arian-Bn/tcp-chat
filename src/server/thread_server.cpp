@@ -16,7 +16,7 @@ void handle_client(int client_fd) {
     buffer[bytes] = '\0';
     std::println("[THREAD] Received: {}", buffer);
     // echo
-    send(client_fd, buffer, bytes, 0);
+    send(client_fd, buffer, bytes, MSG_NOSIGNAL);
   }
   log_to_file("threads", "Client disconnected");
   close(client_fd);

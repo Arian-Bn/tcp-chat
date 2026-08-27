@@ -179,14 +179,14 @@ int run_epoll_server() {
                   std::string broadcast_msg =
                       std::format("[Client {}] {}", fd, msg);
                   auto packet = make_protocol_message(broadcast_msg);
-                  send(order_fd, packet.data(), packet.size(), 0);
+                  send(order_fd, packet.data(), packet.size(), MSG_NOSIGNAL);
                   std::println("[BCAST] [Client {} -> Client {}]: {}", fd,
                                order_fd, msg);
                 }
               }
               // Echo back to sender
               auto echo_packet = make_protocol_message(msg);
-              send(fd, echo_packet.data(), echo_packet.size(), 0);
+              send(fd, echo_packet.data(), echo_packet.size(), MSG_NOSIGNAL);
               std::println("[ECHO] [Server -> Client {}]: {}", fd, msg);
             }
           } else if (bytes_read == 0) {

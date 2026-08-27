@@ -2,6 +2,7 @@
 #include "chat_room.hpp"
 #include <boost/asio.hpp>
 #include <deque>
+#include <vector>
 
 using boost::asio::ip::tcp;
 
@@ -18,6 +19,10 @@ private:
 
   tcp::socket socket_;
   ChatRoom &room_;
-  std::array<char, 1024> buffer_;
-  std::deque<std::string> write_msgs_;
+
+  std::vector<char> read_buffer_;
+  uint32_t expected_length_ = 0;
+  bool reading_header_ = true;
+
+  std::deque<std::vector<char>> write_msgs_;
 };

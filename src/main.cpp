@@ -7,7 +7,11 @@ int run_epoll_server();
 int run_asio_server();
 
 int main(int argc, char *argv[]) {
-  signal(SIGPIPE, SIG_IGN);
+  if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+    std::perror("[ERROR] Failed to ignore SIGPIPE");
+    return 1;
+  }
+
   // Default value
   std::string_view mode = "epoll";
 
@@ -29,10 +33,8 @@ int main(int argc, char *argv[]) {
   } else if (mode == "asio") {
     std::println("[MAIN] Starting Boost.Asio server...");
     return run_asio_server();
-  } else {
-    std::println("[MAIN] Unknown mode: {}. Use: threads, epoll, asio", mode);
-    return 1;
   }
 
-  return 0;
+  std::println("[MAIN] Unknown mode: {}. Use: threads, epoll, asio", mode);
+  return 1;
 }

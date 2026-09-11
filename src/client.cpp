@@ -11,6 +11,21 @@
 #include <thread>
 #include <unistd.h>
 
+// Custom stateless deleter to enforce automatic exception-safe resource cleanup
+struct SocketDeleter {
+  void operator()(int *fd_ptr) const {
+    int fd = reinterpret_cast<intptr_t>(fd_ptr);
+    if (fd >= 0) {
+      close(fd);
+      std::println("[RAII] Client socket {} clean shutdown by OS.", fd);
+    }
+  }
+};
+
+using SafeSocket = std::unique_ptr<int, SocketDeleter>;
+
+// Modern C++ wrapper to extract and print OS system error strings via
+// std::error_code
 void print_system_error(std::string_view context) {
   std::error_code ec = std::make_error_code(static_cast<std::errc>(errno));
   std::println(std::cerr, "[ERROR] {}: {} (Code: {})", context, ec.message(),
@@ -20,13 +35,17 @@ void print_system_error(std::string_view context) {
 // Background thread function: strictly handles incoming message from server
 void received_message(int client_fd) {
   std::vector<char> buffer;
+  char chunk[1024];
+
   while (true) {
-    char chunk[1024];
     ssize_t byte_received = recv(client_fd, chunk, sizeof(chunk), 0);
 
     if (byte_received > 0) {
+      // Append new raw wire fragments to the back of our accumulation buffer
       buffer.insert(buffer.end(), chunk, chunk + byte_received);
 
+      // Process and slash multiple complete messages packed within a single TCP
+      // packet burst
       while (true) {
         std::string msg = extract_message(buffer);
         if (msg.empty())
@@ -37,41 +56,48 @@ void received_message(int client_fd) {
       }
     } else if (byte_received == 0) {
       std::println("\r[INFO] Server closed the connection.");
-      close(client_fd);
+      // Destructor in main thread will handle the raw descriptor cleanup safely
       std::exit(0);
     } else {
       print_system_error("Error receiving data");
-      close(client_fd);
       std::exit(1);
     }
   }
 }
 
 int main() {
-  // Create socket
-  int client_fd = socket(AF_INET, SOCK_STREAM, 0);
-  if (client_fd == -1) {
+  int raw_client = socket(AF_INET, SOCK_STREAM, 0);
+  if (raw_client < 0) {
     print_system_error("Failed to create socket");
     return 1;
   }
+
+  // Manage client lifecycle via EBO-optimized smart pointer
+  SafeSocket client_holder(
+      reinterpret_cast<int *>(static_cast<intptr_t>(raw_client)));
+  int client_fd =
+      static_cast<int>(reinterpret_cast<intptr_t>(client_holder.get()));
 
   // Configure server address
   struct sockaddr_in server_addr{};
   server_addr.sin_family = AF_INET;
   server_addr.sin_port = htons(55555);
-  inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr);
+  if (inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr) <= 0) {
+    print_system_error("Invalid loopback target address");
+    return 1;
+  }
 
   // Connect to server
   if (connect(client_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) <
       0) {
     print_system_error("Failed to connect to server");
-    close(client_fd);
     return 1;
   }
 
   std::println("[INFO] Connected to server! Type 'exit' to quit.");
 
-  // SPAWN BACKGROUND THREAD: Hand over the socket listening task to it
+  // Spin off an isolated reading thread while main thread manages interactive
+  // user console inputs
   std::thread recv_thread(received_message, client_fd);
   recv_thread.detach();
 
@@ -89,18 +115,15 @@ int main() {
       continue;
     }
 
-    // Send data to server using protocol
+    // Serialize text into our length-prefixed stream framing protocol layout
     auto packet = make_protocol_message(user_input);
     ssize_t bytes_sent =
         send(client_fd, packet.data(), packet.size(), MSG_NOSIGNAL);
     if (bytes_sent < 0) {
-      print_system_error("Failed to send message");
+      print_system_error("Failed to dispatch protocol package");
       break;
     }
   }
-
-  // Clean up
-  close(client_fd);
 
   return 0;
 }

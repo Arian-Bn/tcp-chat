@@ -14,7 +14,7 @@ struct SocketDeleter {
     int fd = reinterpret_cast<intptr_t>(fd_ptr);
     if (fd >= 0) {
       close(fd);
-      std::println("[RAII] Socket {} successfully closed by the OS!", fd);
+      std::println("[RAII] Socket {} successfully closed by the OS.", fd);
     }
   }
 };

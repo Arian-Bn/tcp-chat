@@ -1,5 +1,6 @@
 #include "utils.hpp"
 #include <arpa/inet.h>
+#include <cstdio>
 #include <format>
 #include <memory>
 #include <print>
@@ -28,28 +29,63 @@ void handle_client(int raw_client_fd) {
   // if an exception occurs
   SafeSocket client_fd(
       reinterpret_cast<int *>(static_cast<intptr_t>(raw_client_fd)));
+  int fd = static_cast<int>(reinterpret_cast<intptr_t>(client_fd.get()));
   char buffer[1024];
-  while (true) {
-    int fd = static_cast<int>(reinterpret_cast<intptr_t>(client_fd.get()));
-    ssize_t bytes = recv(fd, buffer, sizeof(buffer) - 1, 0);
 
-    // Explicitly distinguish between EOF (clean disconnect) and socket network
-    // errors
-    if (bytes <= 0) {
-      if (bytes < 0) {
-        std::perror("[ERROR] recv failed");
-      } else {
-        std::println("[THREAD] Client disconnected cleanly.");
+  while (true) {
+    uint32_t net_len = 0;
+    size_t total_header_read = 0;
+
+    // 1. Fully read the 4-byte stream protocol length header via an
+    // accumulation loop to handle TCP fragmentation
+    while (total_header_read < sizeof(net_len)) {
+      ssize_t bytes =
+          recv(fd, reinterpret_cast<char *>(&net_len) + total_header_read,
+               sizeof(net_len) - total_header_read, 0);
+
+      if (bytes <= 0) {
+        if (bytes < 0) {
+          std::perror("[ERROR] recv header failed");
+        } else {
+          std::println("[THREAD] Client disconnected cleanly.");
+        }
+        return;
       }
+      total_header_read += bytes;
+    }
+
+    uint32_t msg_len = ntohl(net_len);
+
+    if (msg_len >= sizeof(buffer)) {
+      std::println("[ERROR] Message too large: {}", msg_len);
       break;
     }
 
-    buffer[bytes] = '\0';
-    std::println("[THREAD] Received: {}", buffer);
+    size_t total_body_read = 0;
+    while (total_body_read < msg_len) {
+      ssize_t bytes =
+          recv(fd, buffer + total_body_read, msg_len - total_body_read, 0);
 
-    // Prevent process crashes via MSG_NOSIGNAL if the remote client terminates
-    // abruptly
-    send(fd, buffer, bytes, MSG_NOSIGNAL);
+      if (bytes <= 0) {
+        if (bytes < 0)
+          std::perror("[ERROR] recv body failed");
+        return;
+      }
+      total_body_read += bytes;
+    }
+
+    buffer[total_body_read] = '\0';
+    std::println("[THREAD] Received from Fd {}: {}", fd, buffer);
+
+    if (send(fd, &net_len, sizeof(net_len), MSG_NOSIGNAL) < 0) {
+      std::perror("[ERROR] send header failed");
+      break;
+    }
+
+    if (send(fd, buffer, total_body_read, MSG_NOSIGNAL) < 0) {
+      std::perror("[ERROR] send body failed");
+      break;
+    }
   }
   log_to_file("threads", "Client disconnected");
 }
@@ -101,7 +137,7 @@ int run_threaded_server() {
       continue;
     }
 
-    std::println("[THREAD] New client connected");
+    std::println("[THREAD] New client connected. Fd: {}", client_raw);
     log_to_file("threads", std::format("Client connected"));
 
     // Delegate the connection processing to an isolated, detached worker thread
